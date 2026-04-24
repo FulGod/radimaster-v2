@@ -1,0 +1,109 @@
+name: Deploy RadiMaster V2
+
+on:
+  push:
+    branches: [stage]
+    paths: ['v2/**']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy environment'
+        required: true
+        type: choice
+        options: [stage, production]
+        default: stage
+
+env:
+  SERVER: radimaster@canthorivertour.com
+  BASE_DIR: /home/deploy/projects
+
+jobs:
+  deploy-stage:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event.inputs.environment == 'stage'
+    environment: stage
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stage
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: ssh-keyscan -H canthorivertour.com >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging
+        run: |
+          ssh $SERVER bash -s <<'EOF'
+            set -e
+            REMOTE_DIR=${{ env.BASE_DIR }}/stage/radimaster
+
+            if [ ! -d "$REMOTE_DIR/.git" ]; then
+              mkdir -p $(dirname $REMOTE_DIR)
+              git clone -b stage git@github.com:FulGod/radimaster.git $REMOTE_DIR
+            fi
+            cd $REMOTE_DIR
+            git fetch origin && git checkout stage && git pull origin stage
+
+            cd v2
+            docker compose -f docker-compose.yml -f docker-compose.stage.yml \
+              --env-file .env down --remove-orphans 2>/dev/null || true
+            docker compose -f docker-compose.yml -f docker-compose.stage.yml \
+              --env-file .env build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.stage.yml \
+              --env-file .env up -d
+
+            echo "✅ Staging deployed (branch: stage)"
+            docker compose -f docker-compose.yml -f docker-compose.stage.yml \
+              --env-file .env ps
+          EOF
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'production'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: ssh-keyscan -H canthorivertour.com >> ~/.ssh/known_hosts
+
+      - name: Deploy to production
+        run: |
+          ssh $SERVER bash -s <<'EOF'
+            set -e
+            REMOTE_DIR=${{ env.BASE_DIR }}/production/radimaster
+
+            if [ ! -d "$REMOTE_DIR/.git" ]; then
+              mkdir -p $(dirname $REMOTE_DIR)
+              git clone -b master git@github.com:FulGod/radimaster.git $REMOTE_DIR
+            fi
+            cd $REMOTE_DIR
+            git fetch origin && git checkout master && git pull origin master
+
+            cd v2
+            docker compose -f docker-compose.yml -f docker-compose.production.yml \
+              --env-file .env down --remove-orphans 2>/dev/null || true
+            docker compose -f docker-compose.yml -f docker-compose.production.yml \
+              --env-file .env build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.production.yml \
+              --env-file .env up -d
+
+            echo "✅ Production deployed (branch: master)"
+            docker compose -f docker-compose.yml -f docker-compose.production.yml \
+              --env-file .env ps
+          EOF

@@ -1,0 +1,70 @@
+services:
+  # --- PostgreSQL ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: radimaster_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: radimaster
+      POSTGRES_USER: radimaster
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-radimaster_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # ports defined in environment overrides
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radimaster"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- Redis (PubSub + Cache) ---
+  redis:
+    image: redis:7-alpine
+    container_name: radimaster_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    # ports defined in environment overrides
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- Go Backend ---
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: radimaster_backend
+    restart: unless-stopped
+    # ports defined in environment overrides
+    environment:
+      PORT: "8080"
+      ENVIRONMENT: production
+      DATABASE_URL: postgres://radimaster:${DB_PASSWORD:-radimaster_secret}@postgres:5432/radimaster?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-radimaster-prod-change-this}
+      MEDIA_DIR: /app/med-data
+    volumes:
+      - ../v1/public/med-data-bak:/app/med-data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --- React Frontend (Nginx) ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    container_name: radimaster_frontend
+    restart: unless-stopped
+    # ports defined in environment overrides
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

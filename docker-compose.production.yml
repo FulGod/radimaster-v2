@@ -1,0 +1,29 @@
+# Production: standard ports
+services:
+  postgres:
+    container_name: radimaster_prod_postgres
+    ports:
+      - "5434:5432"
+
+  redis:
+    container_name: radimaster_prod_redis
+    ports:
+      - "6380:6379"
+
+  backend:
+    container_name: radimaster_prod_backend
+    ports:
+      - "8080:8080"
+    environment:
+      ENVIRONMENT: production
+    volumes:
+      - /home/deploy/projects/radimaster/v1/public/med-data-bak:/app/med-data:ro
+
+  frontend:
+    container_name: radimaster_prod_frontend
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
+    name: radimaster_prod_postgres_data

@@ -1,0 +1,38 @@
+# Stage: join global_net for Nginx Proxy Manager
+services:
+  postgres:
+    container_name: radimaster_stage_postgres
+    ports:
+      - "5435:5432"
+
+  redis:
+    container_name: radimaster_stage_redis
+    ports:
+      - "6381:6379"
+
+  backend:
+    container_name: radimaster_stage_backend
+    environment:
+      ENVIRONMENT: staging
+      # Use container names to avoid DNS collision on global_net
+      DATABASE_URL: postgres://radimaster:${DB_PASSWORD:-radimaster_secret}@radimaster_stage_postgres:5432/radimaster?sslmode=disable
+      REDIS_URL: redis://radimaster_stage_redis:6379/0
+    volumes:
+      - /home/deploy/projects/radimaster/v1/public/med-data-bak:/app/med-data:ro
+    networks:
+      - default
+      - global_net
+
+  frontend:
+    container_name: radimaster_stage_frontend
+    networks:
+      - default
+      - global_net
+
+volumes:
+  postgres_data:
+    name: radimaster_stage_postgres_data
+
+networks:
+  global_net:
+    external: true

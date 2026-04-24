@@ -1,0 +1,24 @@
+# Environment files (contains secrets)
+v2/.env
+v2/.env.stage
+v2/.env.production
+v2/backend/.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Node
+v2/frontend/node_modules/
+v2/frontend/dist/
+
+# Go
+v2/backend/tmp/
+
+# Docker
+v2/postgres_data/
